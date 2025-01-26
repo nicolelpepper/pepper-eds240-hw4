@@ -1,0 +1,40 @@
+---
+title: "EDS 240 - HW2 Part 2: Final Project Data Exploration"
+author: "Nicole Pepper"
+date: xxxx-xx-xx
+format:
+  html:
+    embed-resources: true # this ensures that your rendered .html file is self-contained, so we (your instructors) can open it and view all your work
+---
+
+
+### Set Up Workspace
+```{r}
+# ---- Load libraries ----
+
+
+```
+
+### Read in project data
+```{r}
+# ---- Read in ____ data ----
+
+# ---- Read in ____ data ----
+```
+
+```{r}
+# ---- Clean and wrangle data ----
+```
+
+
+### Create at least 3 exploratory data visualizations
+
+The goal of these visualizations is to explore your data for any potentially interesting patterns or trends, which you or may not decide to pursue further as you iterate on your final project deliverable. These plots do not need to be polished (e.g. updated theme), but it may be helpful to try arranging data to identify any trends.
+```{r}
+
+```
+
+### Answer questions:
+1. What have you learned about your data? Have any potentially interesting patterns emerged?
+2. In HW #1, you outlined some questions that you wanted to answer using these data. Have you made any strides towards answering those questions? If yes, how so? If no, what next steps do you need to take (e.g. I need to create X plot type, I still need to track down Y data, I need to restructure existing data so that you can visualize it in Z ways, etc.)?
+3. What challenges do you foresee encountering with your data? These can be data wrangling and / or visualization challenges.
