@@ -1,0 +1,247 @@
+---
+title: "EDS 240 - HW2 Part 2: Final Project Data Exploration"
+author: "Nicole Pepper"
+date: 2025-02-02
+format:
+  html:
+    code-fold: true
+    embed-resources: true
+execute: 
+  eval: true
+  warning: false
+  message: false
+editor_options: 
+  chunk_output_type: console
+---
+
+
+### Set Up Workspace
+```{r}
+#| code-summary: "Load Libraries"
+#| 
+# ---- Load libraries ----
+library(here)
+library(dplyr)
+library(tidyverse)
+library(janitor)
+library(tidycensus)
+library(terra)
+library(sf)
+library(tmap)
+
+```
+
+### Read in project data
+```{r}
+#| code-summary: "Read in Fire Perimeter and HOLC Data"
+
+# ---- Read in fire boundary data ----
+eaton_perim <- st_read(here::here("data/wfigs")) |>
+    clean_names() |>
+    dplyr::filter(poly_incid == "Eaton") |>
+    st_make_valid()
+
+# ---- Read in la census tract boundary data ----
+la_census_tracts <- st_read(here::here("data/2020_Census_Tracts/2020_Census_Tracts.shp"))
+
+# ---- Read in HOLC data ----
+holc_grade <- sf::read_sf(here::here("data/holc/mapping-inequality-los-angeles.json")) 
+
+
+```
+
+### Clean and Wrangle Data
+```{r}
+#| code-summary: "Check CRS"
+
+# ---- Check if matching CRS ----
+
+if (st_crs(eaton_perim) != st_crs(holc_grade) | st_crs(eaton_perim) != st_crs(holc_grade)| st_crs(eaton_perim) != st_crs(la_census_tracts)) {
+    warning("The datasets do not have the same CRS.")
+  } else {
+    message("All datasets are in the same CRS.")
+  }
+
+print(st_crs(eaton_perim))
+print(st_crs(la_census_tracts))
+
+la_census_tracts <- st_transform(la_census_tracts, st_crs(eaton_perim))
+
+
+```
+
+```{r}
+#| code-summary: "Read in `tidycensus` Data"
+
+#.........see all available ACS variables + descriptions.........
+acs_vars <- tidycensus::load_variables(year = 2023,
+                                       dataset = "acs1")
+
+la_census <- tidycensus::get_acs(
+  geography = "tract",
+  variables = c("B19013_001", # income
+                # race 
+                "B01003_001", "B02001_002", "B02001_003",
+                "B02001_004", "B02001_005", "B02001_006",
+                "B02001_007", "B02001_008", "B03002_012",
+                "B03002_002"),  
+  state = "CA",
+  county = "Los Angeles",
+ # geometry = TRUE,  # Retrieve shapefiles
+  year = 2022
+) |>
+    
+  dplyr::left_join(acs_vars,
+                   by = dplyr::join_by(variable == name)) |> # join variable descriptions (so we know what's what!)
+  clean_names()
+    
+    # Create a table for "Total Population" to join as separate column
+
+# Clean race ethnicity data
+la_census_clean <- la_census |>
+
+    # Clean county names to match names in FEMA data for join
+  mutate(label = str_remove(label, "Estimate!!Total:!!"),
+         label = str_remove(label, ":"),
+         label = str_remove(label, " alone"),
+         label = str_remove(label, "Some "),
+         geoid = str_remove(geoid, "06037")) 
+
+total_pop <- la_census_clean |>
+  filter(concept == "Total Population") |>
+  select(all_of(c("geoid","estimate")))
+
+income <- la_census_clean |>
+  filter(concept == "Median Household Income in the Past 12 Months (in 2023 Inflation-Adjusted Dollars)") |>
+  select(all_of(c("geoid","estimate")))
+
+#  Join Total Population Table with cleaned race ethnicity data
+la_census_clean <- left_join(la_census_clean,
+                                  total_pop,
+                                  by = "geoid")
+
+la_census_clean <-left_join(la_census_clean,
+                            income,
+                            by = "geoid") |>
+      
+  # Remove total population from race_ethnicity `concept` field
+  filter(concept != "Total Population",
+         label != "Estimate!!Median household income in the past 12 months (in 2023 inflation-adjusted dollars)",
+         label !=  "Not Hispanic or Latino")|>
+    
+    # Rename columns
+    rename(total_pop = estimate.y,
+         race_pop = estimate.x,
+         med_hous_inc = estimate,
+         county = name)
+
+
+```
+
+
+```{r}
+#| code-summary: "Merge `tidycensus` Data with Census Tract Shapefile"
+# ---- Clean census tracts data for merge ----
+la_census_tracts_clean <- la_census_tracts |>
+    clean_names() |>
+    rename(geoid = ct20)
+
+# ---- Merge tracts and census data ----
+
+la_census_merge <- la_census_tracts_clean |>
+    left_join(la_census_clean, by = "geoid")  |>
+     select(!c(county, moe))|>
+    rename(race = label.y) 
+```
+
+```{r}
+#| code-summary: "Initial Map Overlaying Eaton Fire Perimter on LA Census Tracks"
+# Create a map of Eaton Fire over LA Census Tracts
+ggplot() +
+  geom_sf(data = la_census_tracts_clean, fill = "grey", color = "black", size = 0.1) +
+  theme_minimal() +
+  labs(title = "Eaton Fire Boundary over LA Census Tracts") +
+    geom_sf(data = eaton_perim, color = "red", fill = "NA")
+```
+
+
+```{r}
+#| code-summary: "Intersect Eaton Boundary & Census Data"
+
+la_census_merge <- st_transform(la_census_merge, st_crs(eaton_perim)) |>
+    st_make_valid()
+
+eaton_census_shape <- st_intersection(la_census_merge, eaton_perim)
+
+eaton_census_table <- st_drop_geometry(eaton_census_shape ) |>  
+  mutate(percent_race = (race_pop / total_pop) * 100)
+
+```
+
+### Create at least 3 exploratory data visualizations
+
+The goal of these visualizations is to explore your data for any potentially interesting patterns or trends, which you or may not decide to pursue further as you iterate on your final project deliverable. These plots do not need to be polished (e.g. updated theme), but it may be helpful to try arranging data to identify any trends.
+
+```{r}
+#| code-summary: "Data Viz 1A"
+#  ---- Simple map of fire boundary fill by population by census tract ----
+ggplot() +
+    geom_sf(data = eaton_perim, fill = "NA", color = "red", size = 0.2) +
+    geom_sf(data = eaton_census_shape, aes(fill = total_pop), color = "black", size = 0.1) +
+    scale_fill_viridis_c(option = "magma", name = "Total Population") +  
+    labs(title = "Population of Census Tracts within Eaton Fire Boundary") +
+    theme_minimal()
+
+```
+
+```{r}
+#| code-summary: "Data Viz 1B"
+#  ---- Simple map of fire boundary fill by medium household income by census tract ----
+ggplot() +
+    geom_sf(data = eaton_perim, fill = "NA", color = "red", size = 0.2) +
+    geom_sf(data = eaton_census_shape, aes(fill = med_hous_inc), color = "black", size = 0.1) +
+    scale_fill_viridis_c(option = "viridis",
+                         name = "Median Income") +  
+    labs(title = "Median Household Income Within Eaton Fire Boundary") +
+    theme_minimal()
+
+```
+
+
+```{r}
+#| code-summary: "Data Viz 2"
+# ---- plot
+ggplot(eaton_census_table, aes(x = "", y = percent_race,
+                               fill = race)) +
+  geom_bar(stat = "identity", position = "stack") +
+    
+  labs(title = "Race Proportion in Eaton Census Tracts") +
+  theme_minimal()
+```
+
+
+```{r}
+#| code-summary: "Data Viz 3"
+
+# --- plot of median household income in Eaton by census tract ----
+ggplot(eaton_census_table, aes(x = geoid, y = med_hous_inc)) +
+  geom_col(fill = "cornflowerblue") +
+  labs(title = "Median Household Income in Eaton by Census Tracts",
+       y = "Median Household Income",
+       x = "Race") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90)) 
+
+```
+
+
+### Answer questions:
+#### 1. What have you learned about your data? Have any potentially interesting patterns emerged?
+I was able to figure out how to merge the datasets and clip the census to the Eaton fire perimeter. At a first look, it shows that the area that the Eaton Fire burned has a diverse racial and socioeconomic makeup. In order to draw any meaningful conclusions I will have to compare it to something else - so I could compare it to the broader region and/or a time period.
+
+#### 2. In HW #1, you outlined some questions that you wanted to answer using these data. Have you made any strides towards answering those questions? If yes, how so? If no, what next steps do you need to take (e.g. I need to create X plot type, I still need to track down Y data, I need to restructure existing data so that you can visualize it in Z ways, etc.)?
+It may make sense for me to broaden my analysis to incorporate fires beyond just the Eaton Fire boundary, so that I have more data to work with. This would enable me to look at how fire impacts vary by race and ethnicity, and socioeconomic status in Los Angeles county or the state of California. At this point, I don't feel like I'm confidient in the final plots that I want to make, but I've at least done a lot of the major data wrangling.
+
+#### 3. What challenges do you foresee encountering with your data? These can be data wrangling and / or visualization challenges.
+
+I don't forsee any issues with the data itself. I think that I just need to choose a direction and find a way to make it work! 
