@@ -1,0 +1,155 @@
+---
+title: "EDS 240 - HW2 Part 2: Final Project Data Exploration"
+author: "Nicole Pepper"
+date: 2025-02-04
+format:
+  html:
+    code-fold: true
+    embed-resources: true
+execute: 
+  eval: true
+  warning: false
+  message: false
+editor_options: 
+  chunk_output_type: console
+---
+
+
+### Set Up Workspace
+```{r}
+#| code-summary: "Load Libraries"
+#| 
+# ---- Load libraries ----
+library(here)
+library(dplyr)
+library(tidyverse)
+library(janitor)
+library(tidycensus)
+library(terra)
+library(sf)
+library(tmap)
+library(readxl)
+library(ggstream)
+
+```
+
+
+### Read in Project Data
+```{r}
+salmon <- read.csv(here::here("data","salmon", "WDFW-Salmonid_Population_Indicators__SPI__Escapement_20250214.csv")) |>
+    clean_names()
+```
+
+
+### Explore Data
+```{r}
+salmon_species_year <- salmon |>
+    filter(species %in% c("Coho", "Chum", "Chinhook", "Pink", "Sockeye")) |>
+    filter(year > 1980) |>
+    filter(production_type %in% c( "Natural")) |>
+    group_by(species, year) |>
+    summarise(count = sum(abundance_quantity, na.rm = TRUE)) |>
+    ungroup()
+
+```
+
+```{r}
+salmon_production_year <- salmon |>
+    filter(species %in% c("Coho", "Chum", "Chinhook", "Pink", "Sockeye")) |>
+    filter(year > 1980) |>
+    group_by(production_type, year) |>
+    summarise(count = sum(abundance_quantity, na.rm = TRUE)) |>
+    ungroup()
+
+```
+
+
+```{r}
+# Create the stacked area plot
+ggplot(salmon_species_year, aes(x = year, y = count, fill = species)) +
+    geom_area(alpha = 0.7) +  # Stacked area chart
+    scale_x_continuous(breaks = seq(min(salmon_species_year$year), max(salmon_species_year$year), by = 5)) + # Adjust X-axis breaks
+    labs(title = "Salmon Population Over Time",
+         x = "Year",
+         y = "Count",
+         fill = "Species") +
+    theme_minimal()
+```
+
+
+```{r}
+# Create the stacked area plot
+ggplot(salmon_production_year, aes(x = year, y = count, fill = production_type)) +
+    geom_area(alpha = 0.7) +  # Stacked area chart
+    scale_x_continuous(breaks = seq(min(salmon_production_year$year), max(salmon_production_year$year), by = 5)) + # Adjust X-axis breaks
+    labs(title = "Salmon Population by Production Type Over Time",
+         x = "Year",
+         y = "Count",
+         fill = "Production Type") +
+    theme_minimal()
+```
+
+
+Next dataset
+```{r}
+salmon_ca <- read_excel(here::here("data","salmon","State_of_Salmon_in_CA_083024.xlsx")) |>
+    clean_names() |>
+    filter(c_name %in% c("Chinook")) |>
+    
+mutate(region = case_when(
+    
+    esu_dps_n %in% c("Central Valley Fall & Late Fall-run Chinook Salmon", 
+                     "Central Valley Spring-run Chinook Salmon") ~ "Central Valley",
+    
+    esu_dps_n %in% c("Southern OR & Northern CA Coastal Chinook Salmon",
+                     "Upper Klamath & Trinity Rivers Chinook Salmon") ~ "Northern California",
+    
+    esu_dps_n %in% c("Sacramento River Winter-run Chinook Salmon") ~ "Other",
+    
+    TRUE ~ "Other"  # Default category for any unmatched values
+  ))
+```
+
+```{r}
+ca_salmon_species_year <- salmon_ca |>
+    filter(y_end > 1990) |>
+    group_by(c_name, y_end) |>
+    summarise(count = sum(abun_estimate, na.rm = TRUE)) |>
+    ungroup()
+```
+
+
+```{r}
+ca_salmon_region_year <- salmon_ca |>
+    filter(y_end > 1990) |>
+    group_by(region, y_end) |>
+    summarise(count = sum(abun_estimate, na.rm = TRUE)) |>
+    ungroup()
+```
+
+
+```{r}
+# Create the stacked area plot
+ggplot(ca_salmon_species_year, aes(x = y_end, y = count, fill = c_name)) +
+    geom_stream(type = "ridge", alpha = 0.7) +  # Stacked area chart
+    scale_x_continuous(breaks = seq(min(ca_salmon_species_year$y_end), max(ca_salmon_species_year$y_end), by = 5)) + # Adjust X-axis breaks
+    labs(title = "CA Salmon Population Over Time",
+         x = "Year",
+         y = "Count",
+         fill = "Species") +
+    theme_minimal()
+```
+
+
+```{r}
+# Create streamchart
+
+ggplot(ca_salmon_region_year, aes(y_end, count, fill = region)) +
+  geom_stream() + 
+theme_minimal()
+```
+
+```{r}
+
+```
+
