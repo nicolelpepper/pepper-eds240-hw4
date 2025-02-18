@@ -30,6 +30,7 @@ library(sf)
 library(tmap)
 library(readxl)
 library(ggstream)
+library(networkD3)
 
 ```
 
@@ -145,11 +146,233 @@ ggplot(ca_salmon_species_year, aes(x = y_end, y = count, fill = c_name)) +
 # Create streamchart
 
 ggplot(ca_salmon_region_year, aes(y_end, count, fill = region)) +
-  geom_stream() + 
-theme_minimal()
+  geom_stream(type = "ridge") + 
+theme_minimal() + 
+    labs(title = "Are Chinook Salmon populations in California running low?", fill = "Spawning Region")
 ```
+
+
+Salmon
+```{r}
+ca_salmon_region_year <- salmon_ca |>
+    filter(y_end > 1990) |>
+    group_by(region, y_end) |>
+    summarise(count = sum(abun_estimate, na.rm = TRUE)) |>
+    ungroup()
+```
+
+
+# Select most recent 5-years year
+Sankey for proportion of salmon that goes to 
 
 ```{r}
+# Group by watershed (assuming c_name contains "Chinook Salmon")
+salmon_rivers <- salmon_ca |>
+    filter(grepl("Chinook", c_name, ignore.case = TRUE)) |>  # Ensure correct filtering
+    group_by(region) |>
+    summarise(abundance = sum(abun_estimate, na.rm = TRUE)) |>
+    ungroup()
+
+# Create Nodes (Add "Chinook Salmon" as the first node)
+nodes <- data.frame(name = c("Chinook Salmon", unique(salmon_rivers$region)))
+
+# Create Links (Flow from "Chinook Salmon" to Watersheds)
+links <- data.frame(
+  source = 0,  # "Chinook Salmon" is always the source (index 0)
+  target = match(salmon_rivers$region, nodes$name) - 1,  # Match watersheds to node index
+  value = salmon_rivers$abundance
+)
+
+# Generate Sankey Diagram
+sankeyNetwork(Links = links, Nodes = nodes,
+              Source = "source", Target = "target",
+              Value = "value", NodeID = "name",
+              units = "Salmon", fontSize = 12, nodeWidth = 30)
 
 ```
 
+
+Battle Creek
+```{r}
+battle_salmon <- salmon_ca |>
+    filter(y_end > 1990) |>
+    filter(c_name %in% c("Chinook")) |>
+    filter(w_name %in% c("Battle Creek"))  |>
+    group_by(y_end) |>
+    summarise(abun_estimate = sum(abun_estimate, na.rm = TRUE)) |>
+    ungroup()
+```
+
+
+```{r}
+# Create the plot
+ggplot(battle_salmon, aes(x = y_end, y = abun_estimate)) +
+  geom_area(alpha = 0.6) +  # Creates the filled area chart
+  geom_line(color = "NA", size = 1) +  # Adds a line for better visibility
+  scale_fill_manual(values = c("Chinook" = "#E69F00")) +  # Set custom color
+  labs(
+    title = "Chinook Salmon Abundance in Battle Creek",
+    x = "Year",
+    y = "Estimated Abundance",
+    fill = "Species"
+  ) +
+  theme_minimal() +  # Clean theme
+  theme(legend.position = "top")
+```
+
+
+```{r}
+# Prepare data
+battle_salmon <- salmon_ca |>
+    filter(y_end > 1995) |>
+    filter(c_name == "Chinook") |>
+    filter(w_name == "Battle Creek")  |>
+    group_by(y_end, return_type) |>
+    summarise(abun_estimate = sum(abun_estimate, na.rm = TRUE), .groups = "drop")
+
+# Create the stacked area plot
+ggplot(battle_salmon, aes(x = y_end, y = abun_estimate, fill = return_type)) +
+  geom_stream(type = "ridge", alpha = 0.6) +  # Stacked area chart
+  scale_fill_manual(values = c("Hatchery" = "cornflowerblue", "In-River" = "#56B4E9")) +  # Custom colors
+  labs(
+    title = "An Upstream Battle",
+    subtitle = "Chinook Salmon Populations in Battle Creek",
+    x = "Year",
+    y = "Estimated Abundance",
+    fill = "Return Type"
+  ) +
+  theme_minimal() +  
+  theme(legend.position = "top")
+```
+
+
+
+
+```{r}
+# Prepare data
+battle_salmon <- salmon_ca |>
+    filter(y_end > 1995) |>
+    filter(c_name == "Chinook") |>
+    filter(w_name == "Battle Creek")  |>
+    group_by(y_end, r_timing) |>
+    summarise(abun_estimate = sum(abun_estimate, na.rm = TRUE), .groups = "drop")
+
+
+# Create the stacked area plot
+ggplot(battle_salmon, aes(x = y_end, y = abun_estimate, fill = r_timing)) +
+  geom_stream(type = "ridge", alpha = 0.6) +  # Stacked area chart   # Custom colors
+  labs(
+    title = "An Upstream Battle",
+    subtitle = "Chinook Salmon Populations in Battle Creek",
+    x = "Year",
+    y = "Estimated Abundance",
+    fill = "Return Type"
+  ) +
+  theme_minimal() +  
+  theme(legend.position = "top")
+```
+
+
+```{r}
+# Prepare data
+battle_salmon <- salmon_ca |>
+    filter(y_end > 1995) |>
+    filter(c_name == "Chinook") |>
+    filter(w_name == "Battle Creek")  |>
+    filter(r_timing == "Fall-run Chinook")  |>
+    group_by(y_end, r_timing) |>
+    summarise(abun_estimate = sum(abun_estimate, na.rm = TRUE), .groups = "drop")
+
+
+# Create the stacked area plot
+ggplot(battle_salmon, aes(x = y_end, y = abun_estimate, fill = r_timing)) +
+  geom_stream(type = "ridge", alpha = 0.6) +  # Stacked area chart   # Custom colors
+  labs(
+    title = "An Upstream Battle",
+    subtitle = "Fall Run Chinook",
+    x = "Year",
+    y = "Estimated Abundance",
+    fill = "Return Type"
+  ) +
+  theme_minimal() +  
+  theme(legend.position = "top")
+```
+
+
+```{r}
+# Prepare data
+battle_salmon <- salmon_ca |>
+    filter(y_end > 1995) |>
+    filter(c_name == "Chinook") |>
+    filter(w_name == "Battle Creek")  |>
+    filter(r_timing == "Late Fall-run Chinook")  |>
+    group_by(y_end, r_timing) |>
+    summarise(abun_estimate = sum(abun_estimate, na.rm = TRUE), .groups = "drop")
+
+
+# Create the stacked area plot
+ggplot(battle_salmon, aes(x = y_end, y = abun_estimate, fill = r_timing)) +
+  geom_stream(type = "ridge", alpha = 0.6) +  # Stacked area chart   # Custom colors
+  labs(
+    title = "An Upstream Battle",
+    subtitle = "Late Fall Run Chinook",
+    x = "Year",
+    y = "Estimated Abundance",
+    fill = "Return Type"
+  ) +
+  theme_minimal() +  
+  theme(legend.position = "top")
+```
+
+
+
+```{r}
+# Prepare data
+battle_salmon <- salmon_ca |>
+    filter(y_end > 1995) |>
+    filter(c_name == "Chinook") |>
+    filter(w_name == "Battle Creek")  |>
+    filter(r_timing == "Spring-run Chinook")  |>
+    group_by(y_end, r_timing) |>
+    summarise(abun_estimate = sum(abun_estimate, na.rm = TRUE), .groups = "drop")
+
+
+# Create the stacked area plot
+ggplot(battle_salmon, aes(x = y_end, y = abun_estimate, fill = r_timing)) +
+  geom_stream(type = "ridge", alpha = 0.6) +  # Stacked area chart   # Custom colors
+  labs(
+    title = "An Upstream Battle",
+    subtitle = "Spring Run Chinook",
+    x = "Year",
+    y = "Estimated Abundance",
+    fill = "Return Type"
+  ) +
+  theme_minimal() +  
+  theme(legend.position = "top")
+```
+
+
+```{r}
+# Prepare data
+battle_salmon <- salmon_ca |>
+    filter(y_end > 1995) |>
+    filter(c_name == "Chinook") |>
+    filter(w_name == "Battle Creek")  |>
+    filter(r_timing == "Winter-run Chinook")  |>
+    group_by(y_end, r_timing) |>
+    summarise(abun_estimate = sum(abun_estimate, na.rm = TRUE), .groups = "drop")
+
+
+# Create the stacked area plot
+ggplot(battle_salmon, aes(x = y_end, y = abun_estimate, fill = r_timing)) +
+  geom_stream(type = "ridge", alpha = 0.6) +  # Stacked area chart   # Custom colors
+  labs(
+    title = "An Upstream Battle",
+    subtitle = "Winter Run Chinook",
+    x = "Year",
+    y = "Estimated Abundance",
+    fill = "Return Type"
+  ) +
+  theme_minimal() +  
+  theme(legend.position = "top")
+```
