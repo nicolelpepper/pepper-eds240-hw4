@@ -14,6 +14,40 @@ editor_options:
   chunk_output_type: console
 ---
 
+## 1. Which option do you plan to pursue? 
+
+Infographic
+
+## 2. Restate your question(s). Has this changed at all since HW #1? If yes, how so?
+My questions have completely changed from HW1 since I decided to change the data that I'm using. I am now using a complied dataset from the TNC on salmon abundance in California.
+
+The new primary question that I'm exploring is:
+How has winter-run Chinook Salmon abundance in California changed over time?
+
+My sub questions are:
+1) How has historic Chinook salmon abundance changed over time for different spawning groups? (spoiler - winter run chinook salmon are on the endangered species list)
+2) How does stream water temperature impact Chinook salmon abundance for winter-run salmon?
+3) How have damns impacted winter-run Chinook salmon habitat?
+
+## 3. Explain which variables from your data set(s) you will use to answer your question(s), and how.
+
+#### 1) How has historic Chinook salmon abundance changed over time for different spawning groups? (spoiler - winter run chinook salmon are on the endangered species list)
+I have a data set on salmon river abundance since the 1980s (`salmon_ca`), it contains species (`c_name`), run time (`r_timing`), abundance (`abun_estimate`), and year (`y_end`). Since I'm just interested in Chinook Salmon, first I filtered species to only include Chinook. Next, to calculate the percent of historic salmon abundance that remains, I calculated the average abundance for two time periods: 1970-1980 for historic abundance and 2015 - 2025 for current abundance and then calculated the percent that percent of historic abundance that remains. This provides me with different percentages of historic abundance for each of the run-timing Chinook groups.
+
+#### 2) How does stream water temperature impact Chinook salmon abundance for winter-run salmon?
+I will use two data sets to answer this question, one will be the same data on salmon abundance and the other will be water temperature for stream gauge in Northern California. I have filtered the salmon abundance data for winter-run Chinook salmon. I've created a line chart with different annotations for important features to point out including when the species was listed on the federal endangered species list, a time period when increased flow from the delta improved salmon abundance, and how another recent project temporarily increased salmon abundance. Since winter run Chinook are particularly sensitive to warm temperatures since they spawn in the how summer months I thought that it could be interesting to annotate the graph to indicate years where the water temperature passed the safe temperature threshold for salmon spawning. I will do this by getting the median for the the top ten days of temp and then 
+
+#### 3) How have damns impacted winter-run Chinook salmon habitat?
+For this I'm going to make a map of how historic salmon abundance has changed over time. I have background data for the boundary of California, and an outline of historic habitat and current habitat up until it is impassible (at Keswick Dam). I am going to color rivers by their percent of historic chinook winter-run abundance that remains at the rivers . I will do this by calculating the percent historic abundance in the salmon data and then joining it by river (`w_name`) with the river name in my river shapefile.
+
+![](images/salmon-inspo.png)
+I like the use of annotations and the use of spanning under the geometry of the line graph.
+
+
+![](images/temp-inspo.png)
+It could be cool to show the amount of days/month that exceed the safe river temperature threshold and how that has changed over the years. I like how they ordered the data from top left, so 01/01 starts on the top left, I think this is intuative and I may do that if I start with Jan on top and the first year I look at next to it up top.
+
+![](images/layout.jpg)
 
 ### Set Up Workspace
 ```{r}
@@ -30,7 +64,9 @@ library(sf)
 library(tmap)
 library(readxl)
 library(ggstream)
+library(tmap)
 library(networkD3)
+library(ggpubr)
 
 ```
 
@@ -39,13 +75,16 @@ library(networkD3)
 ```{r}
 salmon <- read.csv(here::here("data","salmon", "WDFW-Salmonid_Population_Indicators__SPI__Escapement_20250214.csv")) |>
     clean_names()
+
+salmon_ca <- read_excel(here::here("data","salmon","State_of_Salmon_in_CA_083024.xlsx")) |> 
+    clean_names()
 ```
 
 
 ### Explore Data
 ```{r}
 salmon_species_year <- salmon |>
-    filter(species %in% c("Coho", "Chum", "Chinhook", "Pink", "Sockeye")) |>
+    filter(species %in% c("Coho", "Chum", "Chinook", "Pink", "Sockeye")) |>
     filter(year > 1980) |>
     filter(production_type %in% c( "Natural")) |>
     group_by(species, year) |>
@@ -54,46 +93,10 @@ salmon_species_year <- salmon |>
 
 ```
 
-```{r}
-salmon_production_year <- salmon |>
-    filter(species %in% c("Coho", "Chum", "Chinhook", "Pink", "Sockeye")) |>
-    filter(year > 1980) |>
-    group_by(production_type, year) |>
-    summarise(count = sum(abundance_quantity, na.rm = TRUE)) |>
-    ungroup()
-
-```
-
-
-```{r}
-# Create the stacked area plot
-ggplot(salmon_species_year, aes(x = year, y = count, fill = species)) +
-    geom_area(alpha = 0.7) +  # Stacked area chart
-    scale_x_continuous(breaks = seq(min(salmon_species_year$year), max(salmon_species_year$year), by = 5)) + # Adjust X-axis breaks
-    labs(title = "Salmon Population Over Time",
-         x = "Year",
-         y = "Count",
-         fill = "Species") +
-    theme_minimal()
-```
-
-
-```{r}
-# Create the stacked area plot
-ggplot(salmon_production_year, aes(x = year, y = count, fill = production_type)) +
-    geom_area(alpha = 0.7) +  # Stacked area chart
-    scale_x_continuous(breaks = seq(min(salmon_production_year$year), max(salmon_production_year$year), by = 5)) + # Adjust X-axis breaks
-    labs(title = "Salmon Population by Production Type Over Time",
-         x = "Year",
-         y = "Count",
-         fill = "Production Type") +
-    theme_minimal()
-```
-
 
 Next dataset
 ```{r}
-salmon_ca <- read_excel(here::here("data","salmon","State_of_Salmon_in_CA_083024.xlsx")) |>
+salmon_ca <- salmon_ca |>
     clean_names() |>
     filter(c_name %in% c("Chinook")) |>
     
@@ -111,268 +114,197 @@ mutate(region = case_when(
   ))
 ```
 
-```{r}
-ca_salmon_species_year <- salmon_ca |>
-    filter(y_end > 1990) |>
-    group_by(c_name, y_end) |>
-    summarise(count = sum(abun_estimate, na.rm = TRUE)) |>
-    ungroup()
-```
 
 
-```{r}
-ca_salmon_region_year <- salmon_ca |>
-    filter(y_end > 1990) |>
-    group_by(region, y_end) |>
-    summarise(count = sum(abun_estimate, na.rm = TRUE)) |>
-    ungroup()
-```
+# Data Viz 1
 
+```{r,fig.asp=.5, out.width="100%"}
 
-```{r}
-# Create the stacked area plot
-ggplot(ca_salmon_species_year, aes(x = y_end, y = count, fill = c_name)) +
-    geom_stream(type = "ridge", alpha = 0.7) +  # Stacked area chart
-    scale_x_continuous(breaks = seq(min(ca_salmon_species_year$y_end), max(ca_salmon_species_year$y_end), by = 5)) + # Adjust X-axis breaks
-    labs(title = "CA Salmon Population Over Time",
-         x = "Year",
-         y = "Count",
-         fill = "Species") +
-    theme_minimal()
-```
+# --- Filled stream chart for winter-run salmon abundance ----
 
-
-```{r}
-# Create streamchart
-
-ggplot(ca_salmon_region_year, aes(y_end, count, fill = region)) +
-  geom_stream(type = "ridge") + 
-theme_minimal() + 
-    labs(title = "Are Chinook Salmon populations in California running low?", fill = "Spawning Region")
-```
-
-
-Salmon
-```{r}
-ca_salmon_region_year <- salmon_ca |>
-    filter(y_end > 1990) |>
-    group_by(region, y_end) |>
-    summarise(count = sum(abun_estimate, na.rm = TRUE)) |>
-    ungroup()
-```
-
-
-# Select most recent 5-years year
-Sankey for proportion of salmon that goes to 
-
-```{r}
-# Group by watershed (assuming c_name contains "Chinook Salmon")
-salmon_rivers <- salmon_ca |>
-    filter(grepl("Chinook", c_name, ignore.case = TRUE)) |>  # Ensure correct filtering
-    group_by(region) |>
-    summarise(abundance = sum(abun_estimate, na.rm = TRUE)) |>
-    ungroup()
-
-# Create Nodes (Add "Chinook Salmon" as the first node)
-nodes <- data.frame(name = c("Chinook Salmon", unique(salmon_rivers$region)))
-
-# Create Links (Flow from "Chinook Salmon" to Watersheds)
-links <- data.frame(
-  source = 0,  # "Chinook Salmon" is always the source (index 0)
-  target = match(salmon_rivers$region, nodes$name) - 1,  # Match watersheds to node index
-  value = salmon_rivers$abundance
-)
-
-# Generate Sankey Diagram
-sankeyNetwork(Links = links, Nodes = nodes,
-              Source = "source", Target = "target",
-              Value = "value", NodeID = "name",
-              units = "Salmon", fontSize = 12, nodeWidth = 30)
-
-```
-
-
-Battle Creek
-```{r}
-battle_salmon <- salmon_ca |>
-    filter(y_end > 1990) |>
-    filter(c_name %in% c("Chinook")) |>
-    filter(w_name %in% c("Battle Creek"))  |>
-    group_by(y_end) |>
-    summarise(abun_estimate = sum(abun_estimate, na.rm = TRUE)) |>
-    ungroup()
-```
-
-
-```{r}
-# Create the plot
-ggplot(battle_salmon, aes(x = y_end, y = abun_estimate)) +
-  geom_area(alpha = 0.6) +  # Creates the filled area chart
-  geom_line(color = "NA", size = 1) +  # Adds a line for better visibility
-  scale_fill_manual(values = c("Chinook" = "#E69F00")) +  # Set custom color
-  labs(
-    title = "Chinook Salmon Abundance in Battle Creek",
-    x = "Year",
-    y = "Estimated Abundance",
-    fill = "Species"
-  ) +
-  theme_minimal() +  # Clean theme
-  theme(legend.position = "top")
-```
-
-
-```{r}
-# Prepare data
-battle_salmon <- salmon_ca |>
-    filter(y_end > 1995) |>
+# group by year
+winter_salmon <- salmon_ca |>
     filter(c_name == "Chinook") |>
-    filter(w_name == "Battle Creek")  |>
-    group_by(y_end, return_type) |>
-    summarise(abun_estimate = sum(abun_estimate, na.rm = TRUE), .groups = "drop")
-
-# Create the stacked area plot
-ggplot(battle_salmon, aes(x = y_end, y = abun_estimate, fill = return_type)) +
-  geom_stream(type = "ridge", alpha = 0.6) +  # Stacked area chart
-  scale_fill_manual(values = c("Hatchery" = "cornflowerblue", "In-River" = "#56B4E9")) +  # Custom colors
-  labs(
-    title = "An Upstream Battle",
-    subtitle = "Chinook Salmon Populations in Battle Creek",
-    x = "Year",
-    y = "Estimated Abundance",
-    fill = "Return Type"
-  ) +
-  theme_minimal() +  
-  theme(legend.position = "top")
-```
-
-
-
-
-```{r}
-# Prepare data
-battle_salmon <- salmon_ca |>
-    filter(y_end > 1995) |>
-    filter(c_name == "Chinook") |>
-    filter(w_name == "Battle Creek")  |>
-    group_by(y_end, r_timing) |>
-    summarise(abun_estimate = sum(abun_estimate, na.rm = TRUE), .groups = "drop")
-
-
-# Create the stacked area plot
-ggplot(battle_salmon, aes(x = y_end, y = abun_estimate, fill = r_timing)) +
-  geom_stream(type = "ridge", alpha = 0.6) +  # Stacked area chart   # Custom colors
-  labs(
-    title = "An Upstream Battle",
-    subtitle = "Chinook Salmon Populations in Battle Creek",
-    x = "Year",
-    y = "Estimated Abundance",
-    fill = "Return Type"
-  ) +
-  theme_minimal() +  
-  theme(legend.position = "top")
-```
-
-
-```{r}
-# Prepare data
-battle_salmon <- salmon_ca |>
-    filter(y_end > 1995) |>
-    filter(c_name == "Chinook") |>
-    filter(w_name == "Battle Creek")  |>
-    filter(r_timing == "Fall-run Chinook")  |>
-    group_by(y_end, r_timing) |>
-    summarise(abun_estimate = sum(abun_estimate, na.rm = TRUE), .groups = "drop")
-
-
-# Create the stacked area plot
-ggplot(battle_salmon, aes(x = y_end, y = abun_estimate, fill = r_timing)) +
-  geom_stream(type = "ridge", alpha = 0.6) +  # Stacked area chart   # Custom colors
-  labs(
-    title = "An Upstream Battle",
-    subtitle = "Fall Run Chinook",
-    x = "Year",
-    y = "Estimated Abundance",
-    fill = "Return Type"
-  ) +
-  theme_minimal() +  
-  theme(legend.position = "top")
-```
-
-
-```{r}
-# Prepare data
-battle_salmon <- salmon_ca |>
-    filter(y_end > 1995) |>
-    filter(c_name == "Chinook") |>
-    filter(w_name == "Battle Creek")  |>
-    filter(r_timing == "Late Fall-run Chinook")  |>
-    group_by(y_end, r_timing) |>
-    summarise(abun_estimate = sum(abun_estimate, na.rm = TRUE), .groups = "drop")
-
-
-# Create the stacked area plot
-ggplot(battle_salmon, aes(x = y_end, y = abun_estimate, fill = r_timing)) +
-  geom_stream(type = "ridge", alpha = 0.6) +  # Stacked area chart   # Custom colors
-  labs(
-    title = "An Upstream Battle",
-    subtitle = "Late Fall Run Chinook",
-    x = "Year",
-    y = "Estimated Abundance",
-    fill = "Return Type"
-  ) +
-  theme_minimal() +  
-  theme(legend.position = "top")
-```
-
-
-
-```{r}
-# Prepare data
-battle_salmon <- salmon_ca |>
-    filter(y_end > 1995) |>
-    filter(c_name == "Chinook") |>
-    filter(w_name == "Battle Creek")  |>
-    filter(r_timing == "Spring-run Chinook")  |>
-    group_by(y_end, r_timing) |>
-    summarise(abun_estimate = sum(abun_estimate, na.rm = TRUE), .groups = "drop")
-
-
-# Create the stacked area plot
-ggplot(battle_salmon, aes(x = y_end, y = abun_estimate, fill = r_timing)) +
-  geom_stream(type = "ridge", alpha = 0.6) +  # Stacked area chart   # Custom colors
-  labs(
-    title = "An Upstream Battle",
-    subtitle = "Spring Run Chinook",
-    x = "Year",
-    y = "Estimated Abundance",
-    fill = "Return Type"
-  ) +
-  theme_minimal() +  
-  theme(legend.position = "top")
-```
-
-
-```{r}
-# Prepare data
-battle_salmon <- salmon_ca |>
-    filter(y_end > 1995) |>
-    filter(c_name == "Chinook") |>
-    filter(w_name == "Battle Creek")  |>
     filter(r_timing == "Winter-run Chinook")  |>
-    group_by(y_end, r_timing) |>
-    summarise(abun_estimate = sum(abun_estimate, na.rm = TRUE), .groups = "drop")
-
+    dplyr::group_by(y_end, r_timing) |>
+    dplyr::summarise(abun_estimate = sum(abun_estimate, na.rm = TRUE), .groups = "drop")
 
 # Create the stacked area plot
-ggplot(battle_salmon, aes(x = y_end, y = abun_estimate, fill = r_timing)) +
-  geom_stream(type = "ridge", alpha = 0.6) +  # Stacked area chart   # Custom colors
-  labs(
-    title = "An Upstream Battle",
-    subtitle = "Winter Run Chinook",
-    x = "Year",
-    y = "Estimated Abundance",
-    fill = "Return Type"
-  ) +
-  theme_minimal() +  
-  theme(legend.position = "top")
+ggplot(winter_salmon, aes(x = y_end, y = abun_estimate, fill = r_timing)) +
+    
+    # Add a bracket for increased release
+    geom_segment(aes(x = 2000, xend = 2000,
+                     y = 9500, yend = 11000),
+                 color = "#71B0A7", size = .25) +
+    
+    geom_segment(aes(x = 2006, xend = 2006,
+                     y = 9500, yend = 11000),
+                 color = "#71B0A7", size = .25) +
+    
+    geom_segment(aes(x = 2000, xend = 2006,
+                     y = 11000, yend = 11000),
+                 color = "#71B0A7", size = .25) +
+    
+    geom_stream(type = "ridge") +
+    
+    # Add red arrow for 1994
+    annotate("text", x = 1993, y = 5000, 
+             label = "↓", color = "#BE4636", size = 8) +
+    
+    # Add population annotation for 1994
+    annotate("text", x = 1993, y = 16000, 
+             label = "Population Drops\nto less than 200",
+             color = "#BE4636",
+             size = 3,
+             fontface = "bold") +
+    
+    # Add endangered annotation for 1994
+    annotate("text", x = 1993, y = 10000, 
+             label = "Put on the endangered\n species list",
+             color = "#BE4636",
+             size = 2.5) +
+    
+     # Add grey arrow for 2018
+    annotate("text", x = 2018, y = 9000, 
+             label = "↓", color = "#71B0A7", size = 8, fontface = "bold") +
+    
+    # Add annotation for 2018
+    annotate("text", x = 2018, y = 15000, 
+             label = "20k juvenile Chinook\nreleased in Battle Creek",
+             color = "#71B0A7",
+             size = 2.5) +
+    
+    # Add bracket annotation
+    annotate("text", x = 2003, y = 15000, 
+             label = "20% Increase\nin Delta Release",
+             color = "#71B0A7",
+             size = 2.5) +
+    
+    scale_fill_manual(values = "#01587C") +
+    
+    labs(
+        title = "California's Winter-Run Chinook Populations Have Plummeted\nover the Past Half-Century",
+        x = "Year",
+        y = "Population\nSize",
+        fill = "Return Type") +
+
+    theme_minimal() +  
+    
+    theme(
+        legend.position = "none",
+        axis.title.x = element_blank(),
+        axis.text = element_text(face = "bold"),
+        axis.title.y = element_text(angle = 0, vjust = .5),
+        panel.grid = element_blank())
+    
 ```
+
+
+```{r}
+# filter to chinook and winter
+# calculate 
+
+winter_chinook <- salmon_ca |>
+    filter(c_name %in% c("Chinook")) #|>
+  #  filter(r_timing %in% c("Winter-run Chinook"))
+
+
+summary_df <- winter_chinook |>
+  filter(y_end %in% c(1975:1980, 2015:2020)) |>
+  group_by(w_name,
+           period = case_when(
+    y_end >= 1970 & y_end <= 1980 ~ "Historic",
+    y_end >= 2015 & y_end <= 2025 ~ "Recent"
+  )) |>
+  summarize(avg_abundance = mean(abun_estimate, na.rm = TRUE), .groups = "drop") |>
+  pivot_wider(names_from = period,
+              values_from = avg_abundance,
+              names_prefix = "avg_") |>
+  mutate(percent_change = ((avg_Recent - avg_Historic) / avg_Historic) * 100)
+
+    
+    
+```
+
+
+```{r}
+# ---- Calculate Percent of historic abundance for chinooks by run ----
+
+winter_chinook <- salmon_ca |>
+    filter(c_name %in% c("Chinook"), r_timing != "Winter Steelhead") #|>
+  #  filter(r_timing %in% c("Winter-run Chinook"))
+
+    summary_df <- winter_chinook |>
+    # filter time periods
+    
+    filter(y_end %in% c(1975:1980, 2015:2020)) |>
+    
+    group_by(r_timing,
+           period = case_when(
+               y_end >= 1970 & y_end <= 1980 ~ "historic",
+               y_end >= 2015 & y_end <= 2025 ~ "recent")) |>
+    
+    summarize(avg_abundance = mean(abun_estimate, na.rm = TRUE)) |>
+    ungroup() |>
+    
+    # pivot wider
+  pivot_wider(names_from = period,
+              values_from = avg_abundance,
+              names_prefix = "avg_") |>
+ # add columns for run 
+  mutate(percent_change = ((avg_recent - avg_historic) / avg_historic) * 100)  |>
+  mutate(percent_historic = (avg_recent / avg_historic) * 100)
+
+
+# Arrange by abundance
+summary_df <- summary_df |>
+  arrange(percent_historic)
+
+# Convert data to long
+summary_df <- summary_df |>
+    
+  select(r_timing, avg_historic, avg_recent) |>
+    
+  pivot_longer(cols = starts_with("avg_"), 
+               names_to = "period", 
+               values_to = "abundance") |>
+    
+  mutate(period = factor(period,
+                         levels = c("avg_historic", "avg_recent"),
+                         labels = c("Historic", "Recent")))
+    
+```
+
+
+# Data Viz 2
+```{r}
+# ---- Stacked area chart of proportion of remaining pop by run ----
+
+# Prep data ----
+
+# Create stacked bar chart for percent historic abundance
+ggplot(summary_df, aes(x = r_timing,
+                       y = abundance,
+                       fill = period)) +
+    
+  geom_bar(stat = "identity", position = "stack") +
+    
+  coord_flip() + 
+    
+  labs(title = "Change in Chinook Salmon Abundance by Run Type",
+       x = "Run Type",
+       y = "Annual Abundance Estimate",
+       fill = "Time Period") +
+    
+    theme_minimal() +
+    
+    theme(axis.title.y = element_blank()) +
+
+  scale_fill_manual(values = c("Historic" = "red","Recent" = "cornflowerblue"))  
+```
+
+Data Viz 3:
+```{r}
+
+```
+
