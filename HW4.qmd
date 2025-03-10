@@ -1,0 +1,478 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+  
+---
+
+Salmon populations in California have faced significant challenges over the past century. Today, the States's remaining salmon populations continue to battle environmental challenges introduced by diversions and dams, which have led to decreased flows, decreased water quality, and increased water temperatures. From the 1890s to 1960s, the construction of dams transformed a once free-flowing rivers, estimated to have supported upwards of ___ million salmon. These barriers have restricted access and diverted water from migratory routes and spawning habitat, critical for their survival.
+
+Winter-run Chinook salmon, native to the Sacramento river drainage, have been particularly hit hard by these environmental challenges, because they uniquely spawn during the hot summer months when river and ambient temperatures are often at their hottest. In the early 1990s winter-run chinook narrowly escaped extinction. Their persistent battle to survive, has inspired my infographic, *"An Upstream Battle for Winter Run Chinook in California"*. 
+
+With this infographic, I wanted to explore the following questions:
+1) How have dams impacted winter-run Chinook salmon habitat?
+2) How has historic Chinook salmon abundance changed over time for winter-run chinook? (spoiler - winter run chinook salmon are on the endangered species list)
+3) How does stream water temperature impact Chinook salmon abundance for winter-run salmon?
+
+Data:
+
+#### Salmon Habitat:
+
+
+#### Abundance Data:
+For Question #2, I got abundance data for salmon in California from (The Nature Conservancy)[https://casalmon.org/statewide-status/#all-species]. This dataset provides estimates for adult population size for a variety of salmon species, including winter-run chinook. 
+
+#### Stream Temperature Data:
+For Question #3,I got stream temperature data from https://cdec.water.ca.gov/dynamicapp/wsSensorData. I retrieved data from right below Keswick Dam, which is now a common spawning location for Chinook, since it is the furthest north reach that is accessible for fish. The dataset provides hourly stream temperature readings from 2020 - present.
+
+
+
+# Inspiration
+
+My inspiration for the look for the piece, I wanted to:
+
+
+
+
+
+For my color palette, I chose blue and reddish-pink. The blue represents water and the river that is critical habitat for the salmon. The pink is inspired by Chinook salmon, who often take on a reddish-pink hue during spawning.
+
+To begin my exploration I set up my workspace.
+### Set Up Workspace
+```{r}
+#| code-summary: "Load Libraries"
+
+# ---- Load libraries ----
+library(here)
+library(dplyr)
+library(tidyverse)
+library(janitor)
+library(tidycensus)
+library(terra)
+library(sf)
+library(tmap)
+library(readxl)
+library(ggstream)
+library(tmap)
+library(networkD3)
+library(ggpubr)
+library(tmap)
+library(elevatr)
+
+```
+
+
+
+### Read in Project Data
+```{r}
+# ---- Salmon population data ----
+salmon <- read.csv(here::here("data","salmon", "WDFW-Salmonid_Population_Indicators__SPI__Escapement_20250214.csv")) |>
+    clean_names()
+
+salmon_ca <- read_excel(here::here("data","salmon","State_of_Salmon_in_CA_083024.xlsx")) |> 
+    clean_names()
+
+# ---- Map data ----
+ca_state <- st_read(here::here("data/California_State_Boundary/California_State_Boundary.shp"))
+
+river <- st_read(here::here("data/rivers/sac_wr_chinook.shp"))
+bay <- st_read(here::here("data/rivers/sac_bay_wr_chinook.shp"))
+
+
+habitat <- st_read(here::here("data/salmon_habitat.shp"))
+
+dams <- st_read(here::here("data/chinook_dams.shp"))
+
+
+# Transform the CRS for all layers after reading them
+ca_state <- st_transform(ca_state, st_crs(4326))
+dams <- st_transform(dams, st_crs(4326)) %>% filter(NAME == "Keswick")
+habitat <- st_transform(habitat, st_crs(4326))
+bay <- st_transform(bay, st_crs(4326)) %>% st_make_valid()
+river <- st_transform(river, st_crs(4326))
+
+# ---- River temp data ----
+kes_stream_temp <- read.csv(here::here("data", "KWK_25_w_temp.csv")) %>%
+  clean_names() %>%
+  mutate(obs_date = as.Date(obs_date), 
+         day_of_year = yday(obs_date), 
+         year = year(obs_date), 
+         month = month(obs_date)) %>%
+  filter(year >= 2020 & year < 2025) %>%
+  mutate(month = factor(month, levels = 1:12, labels = month.name))
+
+
+# --- Salmon statistics ---
+salmon_stats <- read.csv(here::here("data", "SalmonStats.csv"))
+
+
+```
+
+
+
+# Change in habitat.
+
+Every year from November to August, winter-run Chinook, embark on an upstream journey from the San Francisco Bay up to as far as the Keswick Dam. It is estimated that 
+
+travel up to ____ miles, to spawning grounds. Successful spawning, requires cold river temperatures, and once hatched the ___ make their way downstream travel down to the ocean where they often spend three years before returning to their birthplace to spawn. 
+
+Up to (95% of historic habitat)[https://noaa.maps.arcgis.com/apps/MapJournal/index.html?appid=ceebefd9685143daa5bf30d5a7e0c7fa]
+
+To communicate this I wanted to use a combination of graphs with a map to describe how habitat has changed and illustrate habitat loss.
+
+
+
+```{r}
+# Create the map with all layers in the same CRS
+tm_shape(ca_state) +
+  tm_fill(col = "#20566E") +
+    
+  tm_shape(habitat) +
+  tm_fill(col = "Class", palette = c("#65D8FE","#FC90A9")) +
+  tm_shape(dams) +
+  tm_bubbles(col = "red", size = 0.5) +  # Dams as red points
+    
+  tm_shape(river) +
+  tm_lines(col = "#20566E", lwd = 1) +    
+    
+  tm_shape(bay) +
+  tm_fill(col = "#65D8FE") +
+    
+  tm_layout(main.title = "Salmon Habitat in California", 
+            main.title.size = 1.5,
+            frame = FALSE)
+```
+
+
+```{r}
+ggplot() +
+    geom_sf(data = ca_state, fill = "#20566E") + 
+    geom_sf(data = habitat, aes(fill = Class), fill = c("#FC90A9","#0B3447"), color = c("#FC90A9","#0B3447")) + 
+    geom_sf(data = river, color = "#65D8FE") +
+     geom_sf(data = bay, color = "#65D8FE") +
+    geom_sf(data = dams, fill = "red") +
+
+
+    theme_void()
+```
+
+
+
+
+
+
+# Decline in abundance
+To visualize the dramatic decline of their population, I chose to use a filled area chart and colored.
+
+
+```{r,fig.asp=.5, out.width="100%"}
+
+# --- Filled stream chart for winter-run salmon abundance ----
+
+# group by year
+winter_salmon <- salmon_ca |>
+    filter(c_name == "Chinook") |>
+    filter(r_timing == "Winter-run Chinook")  |>
+    dplyr::group_by(y_end, r_timing) |>
+    dplyr::summarise(abun_estimate = sum(abun_estimate, na.rm = TRUE), .groups = "drop")
+
+# Create the stacked area plot
+ggplot(winter_salmon, aes(x = y_end, y = abun_estimate, fill = r_timing)) +
+    
+    # Add a bracket for increased release
+    geom_segment(aes(x = 2000, xend = 2000,
+                     y = 9500, yend = 11000),
+                 color = "#65D8FE", size = .25) +
+    
+    geom_segment(aes(x = 2006, xend = 2006,
+                     y = 9500, yend = 11000),
+                 color = "#65D8FE", size = .25) +
+    
+    geom_segment(aes(x = 2000, xend = 2006,
+                     y = 11000, yend = 11000),
+                 color = "#65D8FE", size = .25) +
+    
+    geom_stream(type = "ridge") +
+    
+    # Add red arrow for 1994
+    annotate("text", x = 1993, y = 5000, 
+             label = "↓", color = "#FC90A9", size = 8) +
+    
+    # Add population annotation for 1994
+    annotate("text", x = 1993, y = 16000, 
+             label = "Population Drops\nto less than 200",
+             color = "#FC90A9",
+             size = 3,
+             fontface = "bold") +
+    
+    # Add endangered annotation for 1994
+    annotate("text", x = 1993, y = 10000, 
+             label = "Put on the endangered\n species list",
+             color = "#FC90A9",
+             size = 2.5) +
+    
+     # Add grey arrow for 2018
+    annotate("text", x = 2018, y = 9000, 
+             label = "↓", color = "#65D8FE", size = 8, fontface = "bold") +
+    
+    # Add annotation for 2018
+    annotate("text", x = 2018, y = 15000, 
+             label = "20k juvenile Chinook\nreleased in Battle Creek",
+             color = "#65D8FE",
+             size = 2.5) +
+    
+    # Add bracket annotation
+    annotate("text", x = 2003, y = 15000, 
+             label = "20% Increase\nin Delta Release",
+             color = "#65D8FE",
+             size = 2.5) +
+    
+    scale_fill_manual(values = "#65D8FE") +
+    
+    labs(
+        title = "California's Winter-Run Chinook Populations Have Plummeted\nover the Past Half-Century",
+        x = "Year",
+        y = "Population\nSize",
+        fill = "Return Type") +
+
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", color = "white"),
+        axis.text.x = element_text(size = 10, face = "bold", color = "white"),
+        axis.text.y = element_text(size = 10, face = "bold", color = "white"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        panel.grid = element_blank(),
+        axis.ticks = element_blank(),
+        plot.background = element_rect(fill = "#004564", color = NA),
+        legend.text = element_text(color = "white"),
+        legend.title = element_text(color = "white"))
+    
+```
+
+
+
+```{r}
+
+# ---- Calculate days exceeding the threshold of 53.3°F ----
+threshold <- 53.3  # Threshold for exceeding temperature
+
+# Flag days where any hourly recording exceeds the threshold
+daily_exceedance <- kes_stream_temp %>%
+  group_by(year, month, obs_date) %>%
+  summarise(exceed_threshold = as.integer(any(value > threshold, na.rm = TRUE))) %>%
+  ungroup()
+
+# Count the number of days exceeding the threshold per month and year
+monthly_exceedance <- daily_exceedance %>%
+  group_by(year, month) %>%
+  summarise(exceed_days = sum(exceed_threshold)) %>%
+  ungroup()
+
+# Print the first few rows to check the data
+head(monthly_exceedance)
+
+# ---- Create a matrix where rows represent years and columns represent months ----
+monthly_exceedance_matrix <- monthly_exceedance %>%
+  complete(year = seq(2020, 2024),
+           month = month.name,
+           fill = list(exceed_days = 0)) %>%
+  arrange(year, match(month, month.name))  # Ensure months are in correct order
+
+# Print the matrix to check the structure
+head(monthly_exceedance_matrix)
+
+# ---- Categorize exceedance days into bins ----
+monthly_exceedance_matrix <- monthly_exceedance_matrix %>%
+  mutate(exceed_category = cut(exceed_days, 
+                               breaks = c(0, 10, 20, 31), 
+                               labels = c("1-10", "10-20", "20-31"), 
+                               include.lowest = TRUE))
+
+# ---- Categorize exceedance days into bins ----
+monthly_exceedance_matrix <- monthly_exceedance_matrix %>%
+  mutate(exceed_category = cut(exceed_days, 
+                               breaks = c(-1, 0, 10, 20, 31), 
+                               labels = c("0", "1-10", "10-20", "20-31"), 
+                               include.lowest = TRUE))
+
+
+```
+
+
+```{r}
+
+# ---- Create the calendar-style heatmap for days per month that exceed temp threshold ----
+ggplot(monthly_exceedance_matrix, aes(x = factor(month, levels = month.name), 
+                                      y = factor(year, levels = rev(unique(year))), 
+                                      fill = exceed_category)) +
+  geom_tile(color = "white",
+            size = 0.5) +
+    
+  # label boxes where the days exceeded is greater than 0    
+  geom_text(aes(label = ifelse(exceed_days > 0, exceed_days, "")),
+            color = "white",
+            fontface = "bold",
+            size = 5) +
+
+    
+  scale_x_discrete(labels = month.abb) +
+    
+  scale_fill_manual(name = "Exceed Days", 
+                    values = c("0" = "#65D8FE",
+                               "1-10" = "#FC90A9",
+                               "10-20" = "#EA597B",
+                               "20-31" = "#E11847")) +
+    
+  labs(title = "Number of Days Exceeding 53.3°F Stream Temperature (2020-2024)",
+       x = "Month",
+       y = "Year") +
+    
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", color = "white"),
+        axis.text.x = element_text(size = 10, face = "bold", color = "white"),
+        axis.text.y = element_text(size = 10, face = "bold", color = "white"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        panel.grid = element_blank(),
+        axis.ticks = element_blank(),
+        plot.background = element_rect(fill = "#004564", color = NA),
+        legend.text = element_text(color = "white"),
+        legend.title = element_text(color = "white"))
+```
+
+
+```{r}
+# ---- Filter data for spawning season (April - August) ----
+spawning_exceedance <- daily_exceedance %>%
+  filter(month %in% c("April", "May", "June", "July", "August")) %>%
+  group_by(year) %>%
+  summarise(exceed_days = sum(exceed_threshold),
+            total_days = n()) %>%
+  mutate(non_exceed_days = total_days - exceed_days) %>%
+  pivot_longer(cols = c(exceed_days, non_exceed_days), 
+               names_to = "exceed_type", 
+               values_to = "days") %>%
+  mutate(proportion = days / total_days)
+
+# Print the prepared data to check
+head(spawning_exceedance)
+
+```
+
+
+```{r}
+# ---- Stacked bar chart showing exceedance proportion per year with conditional labels ----
+ggplot(spawning_exceedance, aes(y = factor(year, levels = rev(unique(year))), 
+                                x = proportion, 
+                                fill = exceed_type)) +
+  geom_bar(stat = "identity", color = "white", size = 0.5) +
+  
+  # Add white bold text labels showing the rounded percentage if it is >= 5%
+  geom_text(aes(label = ifelse(round(proportion * 100) >= 5, 
+                               paste0(round(proportion * 100), "%"), 
+                               "")), 
+            position = position_stack(vjust = 0.5), 
+            color = "white", 
+            fontface = "bold",
+            size = 5) +
+  
+  scale_fill_manual(name = "Temperature Status", 
+                    values = c("exceed_days" = "#E11847", 
+                               "non_exceed_days" = "#65D8FE"),
+                    labels = c("Exceeded Threshold", "Did Not Exceed")) +
+  scale_x_continuous(labels = scales::percent) +
+  labs(title = "Proportion of Spawning Season Days Exceeding Temperature Threshold (2020-2024)",
+       x = "Proportion of Days", y = "Year") +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", color = "white", size = 16, hjust = 0.5),
+        axis.text.x = element_text(size = 12, face = "bold", color = "white"),
+        axis.text.y = element_text(size = 12, face = "bold", color = "white"),
+        axis.title.x = element_text(size = 14, face = "bold", color = "white"),
+        axis.title.y = element_text(size = 14, face = "bold", color = "white"),
+        panel.grid = element_blank(),
+        axis.ticks = element_blank(),
+        plot.background = element_rect(fill = "#004564", color = NA),
+        legend.text = element_text(color = "white"),
+        legend.title = element_text(color = "white"))
+
+```
+
+
+
+```{r}
+# Define habitat proportion
+habitat_prop <- data.frame(
+  category = c("Inaccessible", "Accessible"),
+  value = c(80, 20)
+)
+
+
+# Create the donut chart
+ggplot(habitat_prop, aes(x = 2, y = value,
+                         fill = category)) +
+    
+  geom_bar(stat = "identity", width = 1, color = NA) +
+    
+  coord_polar("y", start = 0) +
+  xlim(0.5, 2.5) +
+    
+  scale_fill_manual(values = c("#65D8FE", "#E11847")) +
+  labs(title = "80% of Historic Spawning Habitat Is No Longer Accessible") +
+    
+  theme_void() +
+
+  theme(
+    plot.title = element_text(face = "bold",
+                              color = "white",
+                              size = 16,
+                              hjust = 0.5),
+    
+    panel.grid = element_blank(),
+    axis.ticks = element_blank(),
+    plot.background = element_rect(fill = "#004564",
+                                   color = NA),
+    legend.position = "none"
+  ) 
+```
+
+
+```{r}
+# Define habitat proportion
+pop_prop <- data.frame(
+  category = c("Remaining", "Historic Pop"),
+  value = c(4, 96)
+)
+
+# Create the donut chart
+ggplot(pop_prop, aes(x = 2, y = value,
+                         fill = category)) +
+    
+  geom_bar(stat = "identity", width = 1, color = NA) +
+    
+  coord_polar("y", start = 0) +
+  xlim(0.5, 2.5) +
+    
+  scale_fill_manual(values = c( "#E11847", "#65D8FE")) +
+  labs(title = "Only 4% of Historic Population Remains") +
+    
+  theme_void() +
+
+  theme(
+    plot.title = element_text(face = "bold",
+                              color = "white",
+                              size = 16,
+                              hjust = 0.5),
+    
+    panel.grid = element_blank(),
+    axis.ticks = element_blank(),
+    plot.background = element_rect(fill = "#004564",
+                                   color = NA),
+    legend.position = "none"
+  ) 
+```
+
+#
+```{r}
+
+```
+

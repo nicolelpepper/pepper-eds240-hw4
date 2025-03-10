@@ -67,6 +67,7 @@ library(ggstream)
 library(tmap)
 library(networkD3)
 library(ggpubr)
+library(tmap)
 
 ```
 
@@ -78,6 +79,17 @@ salmon <- read.csv(here::here("data","salmon", "WDFW-Salmonid_Population_Indicat
 
 salmon_ca <- read_excel(here::here("data","salmon","State_of_Salmon_in_CA_083024.xlsx")) |> 
     clean_names()
+
+ca_state <- st_read(here::here("data/ca_state/CA_state.shp"))
+habitat <- st_read(here::here("data/salmon_habitat.shp"))
+dams <- st_read(here::here("data/chinook_dams.shp"))
+
+
+# Transform the CRS for all layers after reading them
+ca_state <- st_transform(ca_state, st_crs(4326))
+dams <- st_transform(dams, st_crs(4326))
+habitat <- st_transform(habitat, st_crs(4326))
+
 ```
 
 
@@ -280,8 +292,6 @@ summary_df <- summary_df |>
 ```{r}
 # ---- Stacked area chart of proportion of remaining pop by run ----
 
-# Prep data ----
-
 # Create stacked bar chart for percent historic abundance
 ggplot(summary_df, aes(x = r_timing,
                        y = abundance,
@@ -291,20 +301,43 @@ ggplot(summary_df, aes(x = r_timing,
     
   coord_flip() + 
     
-  labs(title = "Change in Chinook Salmon Abundance by Run Type",
+  labs(title = "Change in Chinook Salmon Population by Run Type",
        x = "Run Type",
-       y = "Annual Abundance Estimate",
+       y = "Annual Population Estimate",
        fill = "Time Period") +
     
     theme_minimal() +
     
-    theme(axis.title.y = element_blank()) +
+    theme(axis.title.y = element_blank(),
+          panel.grid = element_blank()) +
 
-  scale_fill_manual(values = c("Historic" = "red","Recent" = "cornflowerblue"))  
+  scale_fill_manual(values = c("Historic" = "#BA6783","Recent" = "#71B0A7"))  
 ```
 
 Data Viz 3:
 ```{r}
 
+# Create the map with all layers in the same CRS
+tm_shape(ca_state) +
+  tm_fill(col = "grey") +
+    
+  tm_shape(habitat) +
+  tm_fill(col = "Class", palette = c("#BE4636","#01587C")) +
+  tm_shape(dams) +
+  tm_bubbles(col = "red", size = 0.5) +  # Dams as red points
+  tm_layout(main.title = "Salmon Distribution in California", 
+            main.title.size = 1.5,
+            frame = FALSE)
 ```
 
+7. Answer the following questions:
+
+a. What challenges did you encounter or anticipate encountering as you continue to build / iterate on your visualizations in R? If you struggled with mocking up any of your three visualizations (from #6, above), describe those challenges here.
+
+It was tricky to choose the right kind of visualization. I still have some thinking to do for my second 2 plots.
+
+b. What ggplot extension tools / packages do you need to use to build your visualizations? Are there any that we haven’t covered in class that you’ll be learning how to use for your visualizations?
+I'm using some GIS tools that we haven't covered yet since I'm making a map.
+
+c. What feedback do you need from the instructional team and / or your peers to ensure that your intended message is clear?
+I need to think more about how to visualize the spatial trend/distribution.
